@@ -38,6 +38,18 @@ def docker(*args):
     return result.stdout.strip()
 
 
+def ensure_image(image):
+    if subprocess.run(['docker', 'image', 'inspect', image], capture_output=True).returncode == 0:
+        return
+    last = None
+    for delay in (0, 2, 5, 10, 20, 40):
+        time.sleep(delay)
+        last = subprocess.run(['docker', 'pull', image], capture_output=True, text=True)
+        if last.returncode == 0:
+            return
+    raise RuntimeError('Test dependency image pull failed after bounded retries: ' + image + '\n' + last.stderr[-1000:])
+
+
 def http(base, path, method='GET', body=None, token=None, binary=False):
     headers = {}
     if token:
@@ -92,7 +104,7 @@ def main():
     image = os.environ.get('BRIDGE_TEST_IMAGE', 'honor-motion:0.2.0')
     prefix = 'hmtest-' + uuid.uuid4().hex[:10]
     network, db, redis, server, bridge = [prefix + '-' + x for x in ('net', 'db', 'redis', 'server', 'bridge')]
-    names = []
+    names = [db, redis, server, bridge]
     checks = []
     with tempfile.TemporaryDirectory(prefix='honor-motion-integration-') as temp:
         root = Path(temp);state = root / 'state';state.mkdir()
@@ -102,11 +114,14 @@ def main():
         password = secrets.token_urlsafe(32)
         token = None
         try:
+            for dependency in ('ghcr.io/immich-app/postgres:18-vectorchord1.1.1', 'valkey/valkey:9',
+                               'ghcr.io/immich-app/immich-server:v3.4.0'):
+                ensure_image(dependency)
             docker('network', 'create', network)
             docker('run', '-d', '--name', db, '--network', network, '-e', 'POSTGRES_PASSWORD=' + password,
                    '-e', 'POSTGRES_USER=postgres', '-e', 'POSTGRES_DB=immich', '--shm-size', '128m',
-                   'ghcr.io/immich-app/postgres:18-vectorchord1.1.1');names.append(db)
-            docker('run', '-d', '--name', redis, '--network', network, 'valkey/valkey:9');names.append(redis)
+                   'ghcr.io/immich-app/postgres:18-vectorchord1.1.1')
+            docker('run', '-d', '--name', redis, '--network', network, 'valkey/valkey:9')
             wait(lambda: subprocess.run(['docker', 'exec', db, 'pg_isready', '-U', 'postgres'], capture_output=True).returncode == 0)
             config = root / 'immich-config.json'
             config.write_text(json.dumps({'machineLearning': {'enabled': False}, 'reverseGeocoding': {'enabled': False}}))
@@ -114,7 +129,7 @@ def main():
                    '-e', 'DB_HOSTNAME=' + db, '-e', 'DB_USERNAME=postgres', '-e', 'DB_PASSWORD=' + password,
                    '-e', 'DB_DATABASE_NAME=immich', '-e', 'REDIS_HOSTNAME=' + redis,
                    '-e', 'IMMICH_CONFIG_FILE=/lab.json', '-v', str(config) + ':/lab.json:ro',
-                   'ghcr.io/immich-app/immich-server:v3.4.0');names.append(server)
+                   'ghcr.io/immich-app/immich-server:v3.4.0')
             port = docker('port', server, '2283').rsplit(':', 1)[1]
             base = 'http://127.0.0.1:' + port + '/api'
             wait(lambda: http(base, '/server/ping'))
@@ -147,7 +162,6 @@ def main():
                 return json.loads(docker('run', '--rm', *options(maintenance=maintenance), image, *args))
             def start_bridge(mode):
                 docker('run', '-d', '--name', bridge, *options(mode), '-p', '127.0.0.1::8080', image)
-                if bridge not in names:names.append(bridge)
                 p = docker('port', bridge, '8080').rsplit(':', 1)[1]
                 target = 'http://127.0.0.1:' + p
                 wait(lambda: http(target, '/readyz'))
