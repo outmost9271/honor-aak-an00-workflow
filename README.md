@@ -1,6 +1,6 @@
 # honor-motion
 
-**v0.2.0：新增可选的 Immich 容器兼容服务。** 支持持久队列、来源台账、鉴权 Webhook、失败对账、显式退出/迁移、备份与宿主目录绑定；结构化 JSONL 记录按 UTC 日期/大小轮转。默认只观察，不写入 Immich。详见 **[容器与生产运维说明](docs/bridge.md)**、[Compose 示例](compose.example.yaml)。
+**v0.2.1：提供可选的 Immich 容器兼容服务，修复存储模板开启时过早隐藏上传视频的时序问题。** 支持持久队列、来源台账、鉴权 Webhook、失败对账、显式退出/迁移、备份与宿主目录绑定；结构化 JSONL 记录按 UTC 日期/大小轮转。默认只观察，不写入 Immich。详见 **[容器与生产运维说明](docs/bridge.md)**、[Compose 示例](compose.example.yaml)。
 
 以下是仍可单独使用的离线脚本：
 

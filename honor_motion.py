@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 
 class MotionError(ValueError):

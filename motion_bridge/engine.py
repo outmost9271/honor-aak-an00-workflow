@@ -110,6 +110,20 @@ class Engine:
             raise Conflict('RECORDED_VIDEO_CHANGED')
         return asset
 
+    def wait_upload_processing(self, photo_id, video_id, checksum):
+        """等待上传流水线越过存储模板和缩略图阶段，再隐藏视频。"""
+        self.store.audit('waiting_upload_processing', photo_id)
+        deadline = time.monotonic() + self.config.upload_ready_timeout
+        while True:
+            video = self.validate_video(video_id, checksum)
+            if video.get('thumbhash'):
+                self.store.update(photo_id, original_path=video.get('originalPath'), event='upload_processing_ready')
+                return
+            if time.monotonic() >= deadline:
+                # 保留已确认的新视频 ID，重试时复用，不能重复上传或提前隐藏。
+                raise BridgeError('UPLOAD_PROCESSING_PENDING')
+            time.sleep(1)
+
     def process(self, row):
         self.identity()  # 每项开始检查版本和实例，升级后默认停止写入。
         pid = row['photo_id']
@@ -168,6 +182,7 @@ class Engine:
                 raise Conflict('UPLOAD_DUPLICATE_NOT_OWNED')
             remote = self.validate_video(vid, vsha1)
             self.store.update(pid, original_path=remote.get('originalPath'))
+        self.wait_upload_processing(pid, vid, vsha1)
         self.assert_photo_unchanged(pid, source_sha1)
         # Immich 没有 compare-and-swap 接口。保守地再次读取，不承诺跨外部客户端的原子性。
         self.writing()

@@ -66,7 +66,7 @@ class FakeAPI:
     def upload(self, data, photo, installation):
         id = str(uuid.uuid4())
         self.assets[id] = {'id': id, 'ownerId': OWNER, 'type': 'VIDEO', 'checksum': sha1_base64(data),
-                           'isTrashed': False, 'visibility': 'timeline', 'originalPath': '/data/upload/' + id + '.mp4'}
+                           'isTrashed': False, 'visibility': 'timeline', 'thumbhash': 'synthetic-ready', 'originalPath': '/data/upload/' + id + '.mp4'}
         self.data[id] = data
         self.uploads += 1
         if self.on_upload:

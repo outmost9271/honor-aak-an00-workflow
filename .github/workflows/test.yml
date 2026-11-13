@@ -34,6 +34,6 @@ jobs:
           python-version: '3.13'
       - run: uv sync --locked
       - name: Build image (never deploy or publish)
-        run: docker build -t honor-motion:0.2.0 .
+        run: docker build -t honor-motion:0.2.1 .
       - name: Test isolated Immich and hardened bridge container
         run: uv run python tests/integration_container.py

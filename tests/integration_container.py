@@ -78,7 +78,7 @@ def upload(base, token, image):
 def synthetic(root):
     fixture = root / 'synthetic-fixture';fixture.mkdir()
     jpg, mp4 = fixture / 'still.jpg', fixture / 'video.mp4'
-    image = os.environ.get('BRIDGE_TEST_IMAGE', 'honor-motion:0.2.0')
+    image = os.environ.get('BRIDGE_TEST_IMAGE', 'honor-motion:0.2.1')
     def ffmpeg(*args):
         # 使用已构建镜像里的 FFmpeg，不依赖 CI 宿主机的 apt 软件源。
         docker('run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
@@ -86,7 +86,8 @@ def synthetic(root):
                '-v', str(fixture) + ':/fixtures', '--entrypoint', 'ffmpeg', image, '-v', 'error', '-y', *args)
     ffmpeg('-f', 'lavfi', '-i', 'color=c=blue:s=320x240', '-frames:v', '1', '/fixtures/still.jpg')
     ffmpeg('-f', 'lavfi', '-i', 'color=c=green:s=320x240:r=15:d=1', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1',
-           '-c:v', 'libx264', '-c:a', 'aac', '-shortest', '/fixtures/video.mp4')
+           '-c:v', 'libx265', '-preset', 'ultrafast', '-x265-params', 'pools=1:frame-threads=1:log-level=error',
+           '-tag:v', 'hvc1', '-c:a', 'aac', '-shortest', '/fixtures/video.mp4')
     # 人工 TIFF 只含 make/model，没有真实设备号、拍摄时间、GPS 或个人信息。
     make, model = b'HONOR\x00', b'AAK-AN00\x00'
     strings = 8 + 2 + 2 * 12 + 4
@@ -101,7 +102,7 @@ def synthetic(root):
 
 
 def main():
-    image = os.environ.get('BRIDGE_TEST_IMAGE', 'honor-motion:0.2.0')
+    image = os.environ.get('BRIDGE_TEST_IMAGE', 'honor-motion:0.2.1')
     prefix = 'hmtest-' + uuid.uuid4().hex[:10]
     network, db, redis, server, bridge = [prefix + '-' + x for x in ('net', 'db', 'redis', 'server', 'bridge')]
     names = [db, redis, server, bridge]
@@ -124,7 +125,8 @@ def main():
             docker('run', '-d', '--name', redis, '--network', network, 'valkey/valkey:9')
             wait(lambda: subprocess.run(['docker', 'exec', db, 'pg_isready', '-U', 'postgres'], capture_output=True).returncode == 0)
             config = root / 'immich-config.json'
-            config.write_text(json.dumps({'machineLearning': {'enabled': False}, 'reverseGeocoding': {'enabled': False}}))
+            config.write_text(json.dumps({'machineLearning': {'enabled': False}, 'reverseGeocoding': {'enabled': False},
+                                          'storageTemplate': {'enabled': True}}))
             docker('run', '-d', '--name', server, '--network', network, '-p', '127.0.0.1::2283',
                    '-e', 'DB_HOSTNAME=' + db, '-e', 'DB_USERNAME=postgres', '-e', 'DB_PASSWORD=' + password,
                    '-e', 'DB_DATABASE_NAME=immich', '-e', 'REDIS_HOSTNAME=' + redis,
@@ -206,7 +208,10 @@ def main():
                 return r if r.get('state') == 'linked' else None
             record = wait(linked)
             video = record['video_id']
-            assert http(base, '/assets/' + video, token=token)['visibility'] == 'hidden'
+            remote_video = http(base, '/assets/' + video, token=token)
+            assert remote_video['visibility'] == 'hidden'
+            assert remote_video.get('thumbhash') and '/library/' in remote_video['originalPath']
+            checks.append('storage template migration and thumbnail complete before hiding')
             assert http(base, '/assets/' + video + '/original', token=token, binary=True) == raw
             assert http(base, '/assets/' + photo + '/original', token=token, binary=True) == source
             checks.append('apply links lossless video; source unchanged; non-root hardened container')
@@ -214,8 +219,17 @@ def main():
             time.sleep(3)
             assert http(base, '/assets/' + photo, token=token)['livePhotoVideoId'] == video
             checks.append('repeat metadata event preserves association')
-            wait(lambda: http(base, '/assets/' + video + '/video/playback', token=token, binary=True))
-            checks.append('Immich playback API returns video')
+            playback_dir = root / 'playback-verification';playback_dir.mkdir()
+            def compatible_playback():
+                data = http(base, '/assets/' + video + '/video/playback', token=token, binary=True)
+                (playback_dir / 'video.mp4').write_bytes(data)
+                text = docker('run', '--rm', '--network', 'none', '--read-only', '--user', f'{os.getuid()}:{os.getgid()}',
+                              '-v', str(playback_dir) + ':/verify:ro', '--entrypoint', 'ffprobe', image,
+                              '-v', 'error', '-show_streams', '-of', 'json', '/verify/video.mp4')
+                streams = json.loads(text)['streams']
+                return any(s['codec_type']=='video' and s['codec_name']=='h264' for s in streams) and any(s['codec_type']=='audio' and s['codec_name']=='aac' for s in streams)
+            wait(compatible_playback)
+            checks.append('HEVC input yields H.264/AAC playback without job.create on bridge key')
             assert cli('backup', '--output', '/state/backup.sqlite3')['status'] == 'backed_up'
             checks.append('online SQLite backup with service running')
             docker('stop', bridge)

@@ -49,6 +49,7 @@ class Config:
     versions: tuple = ('3.4.0',)
     timeout: int = 30
     media_timeout: int = 90
+    upload_ready_timeout: int = 180
     max_bytes: int = 128 * 1024 * 1024
     max_seconds: int = 30
     max_queue: int = 10000
@@ -91,6 +92,7 @@ class Config:
             versions=tuple(e.get('ALLOWED_IMMICH_VERSIONS', '3.4.0').split(',')),
             timeout=number('HTTP_TIMEOUT', 30, 1, 300),
             media_timeout=number('MEDIA_TIMEOUT', 90, 1, 300),
+            upload_ready_timeout=number('UPLOAD_READY_TIMEOUT', 180, 1, 900),
             max_bytes=number('MAX_IMAGE_BYTES', 128 * 1024 * 1024, 1024, 512 * 1024 * 1024),
             max_seconds=number('MAX_VIDEO_SECONDS', 30, 1, 120),
             max_queue=number('MAX_QUEUE', 10000, 1, 1000000),

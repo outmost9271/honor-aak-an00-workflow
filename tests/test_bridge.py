@@ -73,6 +73,40 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(row['created_by_us'])
         self.assertEqual((self.f.api.uploads, self.f.api.deletes, self.f.api.links), (1, 0, 0))
 
+    def test_waits_for_storage_and_thumbnail_before_link(self):
+        def delay_ready():
+            for asset in self.f.api.assets.values():
+                if asset['type'] == 'VIDEO':asset['thumbhash'] = None
+        def finish(_):
+            self.assertEqual(self.f.api.links, 0)
+            for asset in self.f.api.assets.values():
+                if asset['type'] == 'VIDEO':
+                    asset['thumbhash'] = 'ready'
+                    asset['originalPath'] = '/data/library/ready.mp4'
+        self.f.api.on_upload = delay_ready
+        with patch('motion_bridge.engine.time.sleep', side_effect=finish):row = self.f.run()
+        self.assertEqual(row['state'], 'linked')
+        self.assertEqual(row['original_path'], '/data/library/ready.mp4')
+        self.assertEqual(self.f.api.uploads, 1)
+
+    def test_upload_processing_timeout_resumes_without_reupload(self):
+        f = Fixture(self.root / 'processing', upload_ready_timeout=0)
+        def delay():
+            for asset in f.api.assets.values():
+                if asset['type'] == 'VIDEO':asset['thumbhash'] = None
+        f.api.on_upload = delay
+        row = f.run()
+        self.assertEqual(row['state'], 'retry')
+        self.assertEqual(row['error'], 'UPLOAD_PROCESSING_PENDING')
+        self.assertTrue(row['created_by_us'])
+        self.assertEqual(f.api.links, 0)
+        self.assertEqual(f.api.get(row['video_id'])['visibility'], 'timeline')
+        f.api.assets[row['video_id']]['thumbhash'] = 'ready'
+        f.store.update(PHOTO, due=0)
+        f.engine.run_one()
+        self.assertEqual(f.store.get(PHOTO)['state'], 'linked')
+        self.assertEqual(f.api.uploads, 1)
+
     def test_lost_link_response_recovers_idempotently(self):
         self.f.api.link_error_after_commit = True
         row = self.f.run()

@@ -19,7 +19,7 @@ ENV UV_PYTHON_DOWNLOADS=never UV_NO_CACHE=1 UV_PROJECT_ENVIRONMENT=/app/.venv \
 COPY pyproject.toml uv.lock README.md LICENSE NOTICE.md honor_motion.py ./
 COPY motion_bridge/ ./motion_bridge/
 RUN uv sync --frozen --no-dev --no-managed-python
-LABEL org.opencontainers.image.version="0.2.0"
+LABEL org.opencontainers.image.version="0.2.1"
 USER 10001:10001
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
