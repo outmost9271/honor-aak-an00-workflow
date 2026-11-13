@@ -304,7 +304,7 @@ JSONL 可以从完整审计 outbox 重建，所以在线 SQLite 备份是可靠�
 
 ```bash
 uv run python -m unittest discover -s tests -v
-# 需要 Docker、FFmpeg 和本地已构建的镜像；会创建并清理随机命名的隔离实例
+# 需要 Docker 和本地已构建的镜像；使用镜像中的 FFmpeg 合成测试媒体，并清理随机命名的隔离实例
 uv run python tests/integration_container.py
 ```
 

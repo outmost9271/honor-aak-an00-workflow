@@ -64,10 +64,17 @@ def upload(base, token, image):
 
 
 def synthetic(root):
-    jpg, mp4 = root / 'still.jpg', root / 'video.mp4'
-    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=320x240', '-frames:v', '1', str(jpg)], check=True)
-    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=green:s=320x240:r=15:d=1',
-                    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:v', 'libx264', '-c:a', 'aac', '-shortest', str(mp4)], check=True)
+    fixture = root / 'synthetic-fixture';fixture.mkdir()
+    jpg, mp4 = fixture / 'still.jpg', fixture / 'video.mp4'
+    image = os.environ.get('BRIDGE_TEST_IMAGE', 'honor-motion:0.2.0')
+    def ffmpeg(*args):
+        # 使用已构建镜像里的 FFmpeg，不依赖 CI 宿主机的 apt 软件源。
+        docker('run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+               '--security-opt', 'no-new-privileges:true', '--user', f'{os.getuid()}:{os.getgid()}',
+               '-v', str(fixture) + ':/fixtures', '--entrypoint', 'ffmpeg', image, '-v', 'error', '-y', *args)
+    ffmpeg('-f', 'lavfi', '-i', 'color=c=blue:s=320x240', '-frames:v', '1', '/fixtures/still.jpg')
+    ffmpeg('-f', 'lavfi', '-i', 'color=c=green:s=320x240:r=15:d=1', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1',
+           '-c:v', 'libx264', '-c:a', 'aac', '-shortest', '/fixtures/video.mp4')
     # 人工 TIFF 只含 make/model，没有真实设备号、拍摄时间、GPS 或个人信息。
     make, model = b'HONOR\x00', b'AAK-AN00\x00'
     strings = 8 + 2 + 2 * 12 + 4
