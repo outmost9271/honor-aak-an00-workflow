@@ -1,0 +1,70 @@
+# 仅为示例；不与生产数据库或媒体目录挂载，不会自动创建 Immich 工作流。
+services:
+  honor-motion:
+    image: honor-motion:0.2.0
+    build: .
+    user: '10001:10001'
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 5m
+    pids_limit: 128
+    networks: [immich]
+    mem_limit: 1g
+    cpus: 2
+    ports:
+      - '127.0.0.1:8099:8080'
+    environment:
+      IMMICH_URL: '${IMMICH_URL:?set IMMICH_URL without credentials}'
+      IMMICH_API_KEY_FILE: /run/secrets/immich_api_key
+      WEBHOOK_SECRET_FILE: /run/secrets/webhook_secret
+      # 首次只观察；正式启用必须同时修改下面两个值。
+      BRIDGE_MODE: '${BRIDGE_MODE:-observe}'
+      IMMICH_WRITE_ENABLED: '${IMMICH_WRITE_ENABLED:-false}'
+      HONOR_MODEL: '${HONOR_MODEL:-AAK-AN00}'
+      ALLOWED_IMMICH_VERSIONS: '${ALLOWED_IMMICH_VERSIONS:-3.4.0}'
+      STATE_DIR: /state
+      RECORD_MAX_BYTES: '${RECORD_MAX_BYTES:-16777216}'
+      RECORD_TIMEZONE: '${RECORD_TIMEZONE:-UTC}'
+      CLEANUP_GRACE_SECONDS: '${CLEANUP_GRACE_SECONDS:-86400}'
+      WORKERS: '${WORKERS:-1}'
+      VERIFY_DECODE: 'true'
+      REQUIRE_AUDIO: '${REQUIRE_AUDIO:-false}'
+      HTTP_TIMEOUT: '30'
+      MEDIA_TIMEOUT: '90'
+      MAX_IMAGE_BYTES: '134217728'
+      MAX_VIDEO_SECONDS: '30'
+      MAX_QUEUE: '10000'
+    volumes:
+      - type: bind
+        source: '${BRIDGE_STATE_DIR:-./state}'
+        target: /state
+        bind:
+          create_host_path: false
+      - type: bind
+        source: '${IMMICH_API_KEY_PATH:-./secrets/immich_api_key}'
+        target: /run/secrets/immich_api_key
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: '${WEBHOOK_SECRET_PATH:-./secrets/webhook_secret}'
+        target: /run/secrets/webhook_secret
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=384m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+networks:
+  immich:
+    external: true
+    name: '${IMMICH_NETWORK:-immich_default}'

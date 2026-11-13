@@ -43,3 +43,15 @@ private/
 .DS_Store
 Thumbs.db
 .pi/
+
+# Bridge state and secrets must never be published
+state/
+secrets/
+deployment.env
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.jsonl
+*.log
+*.tar.zst
