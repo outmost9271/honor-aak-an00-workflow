@@ -1,0 +1,11 @@
+[project]
+name = "honor-motion"
+version = "0.1.0"
+description = "Offline extraction and conversion of HONOR LIVE_ motion photos"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = []
+
+[tool.uv]
+package = false
