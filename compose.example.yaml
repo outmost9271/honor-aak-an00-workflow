@@ -1,7 +1,7 @@
 # 仅为示例；不与生产数据库或媒体目录挂载，不会自动创建 Immich 工作流。
 services:
   honor-motion:
-    image: honor-motion:0.2.1
+    image: honor-aak-an00-workflow:0.3.0
     build: .
     user: '10001:10001'
     init: true
@@ -27,6 +27,7 @@ services:
       HONOR_MODEL: '${HONOR_MODEL:-AAK-AN00}'
       ALLOWED_IMMICH_VERSIONS: '${ALLOWED_IMMICH_VERSIONS:-3.4.0}'
       STATE_DIR: /state
+      BACKUP_EXPORT_DIR: /backup-export
       RECORD_MAX_BYTES: '${RECORD_MAX_BYTES:-16777216}'
       RECORD_TIMEZONE: '${RECORD_TIMEZONE:-UTC}'
       CLEANUP_GRACE_SECONDS: '${CLEANUP_GRACE_SECONDS:-86400}'
@@ -43,6 +44,11 @@ services:
       - type: bind
         source: '${BRIDGE_STATE_DIR:-./state}'
         target: /state
+        bind:
+          create_host_path: false
+      - type: bind
+        source: '${BRIDGE_EXPORT_DIR:-./backup-export}'
+        target: /backup-export
         bind:
           create_host_path: false
       - type: bind

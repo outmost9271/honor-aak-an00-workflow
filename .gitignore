@@ -55,3 +55,6 @@ deployment.env
 *.jsonl
 *.log
 *.tar.zst
+
+# 构建辅助（ffmpeg 源码包，勿提交）
+build/

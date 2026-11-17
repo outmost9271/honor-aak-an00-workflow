@@ -21,10 +21,19 @@
 在可信的本地克隆仓库构建：
 
 ```bash
-docker build -t honor-motion:0.2.1 .
+docker build -t honor-aak-an00-workflow:0.3.0 .
 ```
 
-镜像固定基础镜像摘要，运行时为非 root 用户 10001，使用 uv 和独立 Python 环境；不需要第三方 Python 包。镜像含 FFmpeg，源码采用 MIT，依赖软件分别遵守自己的许可证；发行包附带依赖版权说明。
+服务已重写为 Go：单容器自包含镜像（scratch + Go 静态二进制 + 裁剪静态 ffmpeg，约 25MB）。运行时为非 root 用户 10001，无第三方运行时依赖；裁剪 ffmpeg 仅含 MP4 解封装与 HEVC/H.264/AAC 解码，用于轨道探测与全片解码验证，不转码。台账备份导出内嵌主服务（每 15 分钟），不再需要独立备份容器、cron 或 sqlite3 CLI。镜像含 FFmpeg（静态裁剪），源码采用 MIT，依赖软件分别遵守自己的许可证；发行包附带依赖版权说明。
+
+备份产物写入 `backup-export/`：文件 0644、目录 0755，属主即服务账号；只读快照工具（如无特权 root 的 Kopia）经 other 位读取，热 `state/` 保持 0700 不可读。`latest-status.json` 记录最近一次备份的时间、哈希与字节数，`/readyz` 将其新鲜度（30 分钟）纳入就绪条件。
+
+构建前需准备 ffmpeg 源码包（不提交 git）：
+
+```bash
+mkdir -p build
+curl -fsSL -o build/ffmpeg-8.0.1.tar.xz https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz
+```
 
 准备目录和示例配置，**下面是待人工执行的部署说明，不是工具自动执行的操作**：
 
