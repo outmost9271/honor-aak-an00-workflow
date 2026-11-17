@@ -37,6 +37,27 @@ func wrapMotionPhoto(t *testing.T, mp4Path string) []byte {
 	return photo
 }
 
+// ensureFixture 按需生成测试媒体（与 CI 惯例一致：fixtures 不入库，ffmpeg 现场生成）。
+func ensureFixture(t *testing.T, dir, name string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+	codec := map[string]string{"test-hevc.mp4": "libx265", "test-h264.mp4": "libx264"}[name]
+	if codec == "" {
+		t.Fatalf("unknown fixture %s", name)
+	}
+	cmd := exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+		"-f", "lavfi", "-i", "testsrc=duration=3:size=320x240:rate=15",
+		"-f", "lavfi", "-i", "sine=frequency=440:duration=3",
+		"-c:v", codec, "-c:a", "aac", "-shortest", path)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generate fixture %s: %v\n%s", name, err, out)
+	}
+	return path
+}
+
 // TestInspectRealMedia 使用真实 HEVC/H.264 样本走完整 inspect 链路（需 ffprobe/ffmpeg）。
 func TestInspectRealMedia(t *testing.T) {
 	if _, err := exec.LookPath("ffprobe"); err != nil {
@@ -46,13 +67,15 @@ func TestInspectRealMedia(t *testing.T) {
 		t.Skip("ffmpeg not available")
 	}
 	p := &Processor{cfg: Config{MaxSeconds: 30, MediaTimeout: 90, Decode: true}}
+	dir := t.TempDir()
 	for _, name := range []string{"test-hevc.mp4", "test-h264.mp4"} {
-		photo := wrapMotionPhoto(t, filepath.Join("testdata", name))
+		fixture := ensureFixture(t, dir, name)
+		photo := wrapMotionPhoto(t, fixture)
 		video, media, err := p.inspect(context.Background(), photo)
 		if err != nil {
 			t.Fatalf("%s inspect: %v", name, err)
 		}
-		mp4, _ := os.ReadFile(filepath.Join("testdata", name))
+		mp4, _ := os.ReadFile(fixture)
 		if len(video) != len(mp4) || sha256Hex(video) != sha256Hex(mp4) {
 			t.Fatalf("%s extracted video not lossless", name)
 		}
